@@ -11,22 +11,16 @@ def webhook():
     body = request.get_json()
     texto = body['sessionInfo']['parameters'].get('texto', '')
 
-    system_prompt = (
-        "Você é um agente da Panorama Móveis que recebe os atendimentos dos clientes "
-        "e tem a função de classificar as solicitações em uma das categorias abaixo:
-"
-        "- Cancelamento
-"
-        "- Acareação (quando o cliente afirma que não recebeu a mercadoria, mas consta como entregue)
-"
-        "- Produto avariado
-"
-        "- Produto não entregue
-"
-        "- Rastreio
-"
-        "Analise a mensagem do cliente e responda apenas com o nome da categoria correspondente."
-    )
+    system_prompt = """
+    Você é um agente da Panorama Móveis que recebe os atendimentos dos clientes
+    e tem a função de classificar as solicitações em uma das categorias abaixo:
+    - Cancelamento
+    - Acareação (quando o cliente afirma que não recebeu a mercadoria, mas consta como entregue)
+    - Produto avariado
+    - Produto não entregue
+    - Rastreio
+    Analise a mensagem do cliente e responda apenas com o nome da categoria correspondente.
+    """
 
     response = openai.ChatCompletion.create(
         model="gpt-4o",
