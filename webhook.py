@@ -17,16 +17,30 @@ def webhook():
         session_params = data.get("sessionInfo", {}).get("parameters", {})
         thread_id = session_params.get("thread_id")
 
-        if not thread_id:
+        # Verificação se o thread_id é válido
+        import re
+        valid_id = lambda x: isinstance(x, str) and re.match(r"^[\w-]+$", x)
+        if not valid_id(thread_id):
             thread = openai.beta.threads.create()
             thread_id = thread.id
 
+        # Enviar mensagem de sistema com os parâmetros, se houver
+        if session_params:
+            context_message = "\n".join([f"{k}: {v}" for k, v in session_params.items() if k != "thread_id"])
+            openai.beta.threads.messages.create(
+                thread_id=thread_id,
+                role="system",
+                content=f"Informações de contexto recebidas do Dialogflow:\n{context_message}"
+            )
+
+        # Enviar mensagem do usuário
         openai.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=user_input
         )
 
+        # Executar o assistant
         run = openai.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=ASSISTANT_ID
