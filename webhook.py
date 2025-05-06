@@ -68,7 +68,8 @@ def webhook():
             },
             "session_info": {
                 "parameters": {
-                    "thread_id": thread_id
+                    "thread_id": thread_id,
+                    "resposta_gpt": [response_text]
                 }
             }
         })
