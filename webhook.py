@@ -1,87 +1,60 @@
+
 from flask import Flask, request, jsonify
 import openai
 import os
-import time
 
 app = Flask(__name__)
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-sessions = {}
+# Configurar sua chave de API do OpenAI
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-@app.route('/webhook', methods=['POST'])
+# ID do seu assistant do ChatGPT
+ASSISTANT_ID = "asst_DMeuS5POFB45TroJC0VwUtpS"
+
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    body = request.get_json()
-    params = body.get('sessionInfo', {}).get('parameters', {})
-    texto = params.get('texto', '')
-    thread_id_param = params.get('thread_id')
-    session_id = body.get('sessionInfo', {}).get('session', 'anon')
+    req = request.get_json()
 
-    # Informações adicionais
-    codigo_rastreio = params.get("Código de Rastreio")
-    ultimo_status = params.get("Último status do rastreio")
-    previsao_entrega = params.get("Previsão de entrega")
-    r_dias = params.get("R_dias")
-    prazo_oc = params.get("Prazo_OC")
-    status_pedido = params.get("Status Pedido")
+    # Extrai o texto diretamente da mensagem do usuário
+    user_message = req.get("text", "")
 
-    # Mensagem que será enviada para o Assistant
-    mensagem_cliente = f"""
-Mensagem do cliente: {texto}
+    # Extrai os parâmetros da sessão enviados pelo Dialogflow CX
+    session_params = req.get("parameters", {})
 
-Informações do pedido:
-- Código de rastreio: {codigo_rastreio}
-- Último status: {ultimo_status}
-- Previsão de entrega: {previsao_entrega}
-- Dias até o prazo da transportadora (R_dias): {r_dias}
-- Prazo de envio (OC): {prazo_oc}
-- Status do pedido: {status_pedido}
-"""
+    # Adiciona a mensagem na thread se existir
+    thread_id = session_params.get("thread_id", None)
 
-    # Define o thread_id com fallback
-    if thread_id_param:
-        thread_key = thread_id_param
-        if thread_key not in sessions:
-            thread = client.beta.threads.create()
-            sessions[thread_key] = thread.id
-    else:
-        thread_key = session_id
-        if thread_key not in sessions:
-            thread = client.beta.threads.create()
-            sessions[thread_key] = thread.id
+    # Constrói o conteúdo do contexto (parâmetros do pedido)
+    context_info = "\n".join([
+        f"Código de Rastreio: {session_params.get('Código de Rastreio', 'Não informado')}",
+        f"Status do Pedido: {session_params.get('Status Pedido', 'Não informado')}",
+        f"Último status do rastreio: {session_params.get('Último status do rastreio', 'Não informado')}",
+        f"Previsão de entrega: {session_params.get('Previsão de entrega', 'Não informado')}",
+        f"Prazo da OC: {session_params.get('Prazo_OC', 'Não informado')}",
+        f"Dias de atraso: {session_params.get('R_dias', 'Não informado')}"
+    ])
 
-    thread_id = sessions[thread_key]
+    # Envia a mensagem para o Assistant da OpenAI com contexto
+    messages = [
+        {"role": "system", "content": "Você é um atendente da Panorama Móveis. Use os dados fornecidos para responder com clareza."},
+        {"role": "user", "content": f"{context_info}\n\nPergunta do cliente: {user_message}"}
+    ]
 
-    # Envia mensagem do cliente para o Assistant
-    client.beta.threads.messages.create(
-        thread_id=thread_id,
-        role="user",
-        content=mensagem_cliente
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=messages,
+        temperature=0.7
     )
 
-    # Executa o Assistant
-    run = client.beta.threads.runs.create(
-        thread_id=thread_id,
-        assistant_id="asst_DMeuS5POFB45TroJC0VwUtpS"
-    )
-
-    # Espera resposta
-    while True:
-        status = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-        if status.status == "completed":
-            break
-        time.sleep(0.5)
-
-    # Retorna resposta ao Dialogflow
-    messages = client.beta.threads.messages.list(thread_id=thread_id)
-    resposta_chat = messages.data[0].content[0].text.value.strip()
+    reply = response.choices[0].message["content"]
 
     return jsonify({
         "fulfillment_response": {
-            "messages": [
-                {"text": {"text": [resposta_chat]}}
-            ]
+            "messages": [{
+                "text": {"text": [reply]}
+            }]
         }
     })
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+if __name__ == "__main__":
+    app.run(debug=True)
