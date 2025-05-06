@@ -2,6 +2,7 @@ import os
 import openai
 import time
 import traceback
+import re
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -17,30 +18,27 @@ def webhook():
         session_params = data.get("sessionInfo", {}).get("parameters", {})
         thread_id = session_params.get("thread_id")
 
-        # Verificação se o thread_id é válido
-        import re
+        # Validar se o thread_id tem formato correto
         valid_id = lambda x: isinstance(x, str) and re.match(r"^[\w-]+$", x)
         if not valid_id(thread_id):
             thread = openai.beta.threads.create()
             thread_id = thread.id
 
-        # Enviar mensagem de sistema com os parâmetros, se houver
+        # Adicionar os parâmetros do Dialogflow no início da mensagem do usuário
         if session_params:
-            context_message = "\n".join([f"{k}: {v}" for k, v in session_params.items() if k != "thread_id"])
-            openai.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="system",
-                content=f"Informações de contexto recebidas do Dialogflow:\n{context_message}"
-            )
+            contexto = "\n".join([f"{k}: {v}" for k, v in session_params.items() if k != "thread_id"])
+            mensagem_final = f"Contexto fornecido pelo sistema:\n{contexto}\n\nMensagem do cliente:\n{user_input}"
+        else:
+            mensagem_final = user_input
 
-        # Enviar mensagem do usuário
+        # Enviar a mensagem consolidada
         openai.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
-            content=user_input
+            content=mensagem_final
         )
 
-        # Executar o assistant
+        # Executar assistant
         run = openai.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=ASSISTANT_ID
