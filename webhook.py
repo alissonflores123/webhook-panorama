@@ -1,7 +1,8 @@
 import os
-from flask import Flask, request, jsonify
 import openai
 import time
+import traceback
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
@@ -62,6 +63,7 @@ def webhook():
 
     except Exception as e:
         print("Erro:", str(e))
+        traceback.print_exc()
         return jsonify({
             "fulfillment_response": {
                 "messages": [{
