@@ -38,7 +38,7 @@ def debug_thread():
             "fulfillment_response": {
                 "messages": [{
                     "text": {
-                        "text": [historico_texto[:4000]]  # corta se passar de 4096 caracteres
+                        "text": [historico_texto[:400000]]  # corta se passar de 4096 caracteres
                     }
                 }]
             }
