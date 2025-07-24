@@ -4,7 +4,6 @@ import traceback
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route("/debug", methods=["POST"])
@@ -17,28 +16,40 @@ def debug_thread():
             return jsonify({
                 "fulfillment_response": {
                     "messages": [{
-                        "text": {
-                            "text": ["Parâmetro thread_id ausente."]
-                        }
+                        "text": {"text": ["Parâmetro thread_id ausente."]}
                     }]
                 }
             })
 
-        messages = openai.beta.threads.messages.list(thread_id=thread_id)
-
+        # 🔁 Paginação para buscar todas as mensagens do thread
         historico = []
-        for msg in reversed(messages.data):  # ordem cronológica
-            role = msg.role.upper()
-            content = msg.content[0].text.value if msg.content else "[mensagem vazia]"
-            historico.append(f"{role}: {content}")
+        after = None
 
+        while True:
+            response = openai.beta.threads.messages.list(
+                thread_id=thread_id,
+                limit=50,         # máximo permitido pela API
+                after=after       # paginação
+            )
+
+            for msg in response.data:
+                role = msg.role.upper()
+                content = msg.content[0].text.value if msg.content else "[mensagem vazia]"
+                historico.append(f"{role}: {content}")
+
+            if not response.has_more:
+                break
+            after = response.data[-1].id
+
+        # Ordena do mais antigo para o mais recente
+        historico = list(reversed(historico))
         historico_texto = "\n\n".join(historico)
 
         return jsonify({
             "fulfillment_response": {
                 "messages": [{
                     "text": {
-                        "text": [historico_texto[:400000]]  # corta se passar de 4096 caracteres
+                        "text": [historico_texto[:400000]]  # ainda limita o total por segurança
                     }
                 }]
             }
@@ -50,9 +61,7 @@ def debug_thread():
         return jsonify({
             "fulfillment_response": {
                 "messages": [{
-                    "text": {
-                        "text": ["Erro ao recuperar histórico."]
-                    }
+                    "text": {"text": ["Erro ao recuperar histórico."]}
                 }]
             }
         })
